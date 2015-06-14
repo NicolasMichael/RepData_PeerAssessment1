@@ -1,8 +1,10 @@
 ---
-title: "Reproducible Research: Peer Assignment 1"
+title: 'Reproducible Research: Peer Assignment 1'
 author: "Nicolas Michael"
 date: "Saturday, June 13, 2015"
-output: html_document
+output:
+  html_document:
+    keep_md: yes
 ---
 
 ## Report Background
@@ -22,7 +24,7 @@ weekdays and weekends.
 The code to load the data into R in order to initialise the data analysis is the following:
 
 ```{r}
-ProjectData <- read.csv("activity.csv")
+ProjectData <- read.csv(unz("activity.zip", "activity.csv"))
 ```
 
 ## Histogram to show the total number of steps taken per day

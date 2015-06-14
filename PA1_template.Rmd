@@ -1,25 +1,228 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Reproducible Research: Peer Assignment 1"
+author: "Nicolas Michael"
+date: "Saturday, June 13, 2015"
+output: html_document
 ---
 
+## Report Background
+The purpose of this report is to analyse a data set taken from an anonymous individual personal activity monitoring device.  
+The data set contains the number of steps taken by that individual over a period of two months, October 2012 and November 2012, in 5 minute intervals per day.  
+The original data set named "activity.csv" can be found in the repository where this report can be found.  
+The data set consists of three (3) variables: steps, date and interval and 17,658 observations.  
+Missing values (steps) are coded as NA.
 
-## Loading and preprocessing the data
+## Report Objectives
+The report will analyse the total number of steps taken by that individual during the reporting period, calculate the mean and
+median number of steps, the average number of steps across the period, calculate the number of missing values and suggest a 
+strategy for imputing missing data and finally analyse the difference in the average number of steps taken between  
+weekdays and weekends.
 
+## Loading the original data set
+The code to load the data into R in order to initialise the data analysis is the following:
 
+```{r}
+ProjectData <- read.csv("activity.csv")
+```
 
-## What is mean total number of steps taken per day?
+## Histogram to show the total number of steps taken per day
+First we need to calculate the number of steps use the following R code:
 
+```{r}
+TotalSteps <- aggregate(ProjectData$steps, by=list(ProjectData$date), FUN=sum, na.rm=TRUE)
+```
 
+Then print the histogram to show the total number of steps taken per day:
 
-## What is the average daily activity pattern?
+```{r}
+hist(TotalSteps$x, main="Total number of steps taken per day", xlab="Total number of steps", col="Green", ylim=c(0,30))
+```
 
+## Mean and median of the total number of steps taken per day
+First we need to remove the missing values from the original data set, by:
 
+```{r}
+CompleteProjectData <- ProjectData[complete.cases(ProjectData),]
+```
 
-## Imputing missing values
+Then calculate the mean and median from the revised data set using the following R code.
+Please note the use of "xtable" package that needs to be installed on your machine for this code to run.
 
+### Calculate mean:
 
+```{r show_mean_table,results='asis'}
+library(xtable)
+MeanPerDay <- aggregate(CompleteProjectData$steps, by=list(CompleteProjectData$date), FUN=mean)
+## Give meaningful names to the data frame generated
+colnames(MeanPerDay) <- c("Date", "Steps")
+MeanTable <- xtable(MeanPerDay, caption="Mean per day:")
+print(MeanTable, type="html", include.rownames=FALSE, caption.placement="top")
+``` 
 
-## Are there differences in activity patterns between weekdays and weekends?
+### Calculate median:
+In calculating the median we first need to eliminate the 5 minute intervals with zero steps.  
+This is necessary for the median function to work correctly in dates where the first 5 minute
+interval and the last 5 minute interval steps is zero.  
+
+```{r show_median_table,results='asis'}
+library(xtable)
+## Remove 5 minute intervals with zeros from the "CompleteProjectData" data frame
+MedianData <- subset(CompleteProjectData, CompleteProjectData$steps >0)
+MedianPerDay <- aggregate(MedianData$steps, by=list(MedianData$date), FUN=median)
+## Give meaningful names to the data frame generated
+colnames(MedianPerDay) <- c("Date", "Steps")
+MedianTable <- xtable(MedianPerDay, caption="Median per day:")
+print(MedianTable, type="html", include.rownames=FALSE, caption.placement="top")
+```
+
+## Average Daily Activity Pattern
+Then we calculate the average daily activity pattern averaged across all days and plot a time series plot to display the pattern.
+
+```{r}
+## Create a data frame to store the average number of steps across all days
+AvgPerInterval <- aggregate(CompleteProjectData$steps, by=list(CompleteProjectData$interval), FUN=mean)
+## Give meaningful names to the data frame generated
+colnames(AvgPerInterval) <- c("Interval", "AvgSteps")
+plot(AvgPerInterval$Interval, AvgPerInterval$AvgSteps, type="l", xlab="5-Minute Interval", ylab="Average Steps Taken", col="Red")
+```
+
+The 5-minute interval that has the maximum number of steps is:
+
+```{r, results='asis'}
+MaxInterval <- AvgPerInterval[order(-AvgPerInterval$AvgSteps), ]
+MaxInterval[1,1]
+```
+
+## Strategy for imputting missing values
+In the data set provided there are days or 5-minute intervals where values are missing.  The missing values could introduce some bias in the analysis because they could represent intervals with high activity where the individual did not carry the activity measure device.  On the other hand they could represent intervals with no activity at all.  This part of the report will suggest a  strategy for imputing the missing values, create a new data set with missing data filled in and estimate how this "complete" data set differs from the original data set used in the analysis.
+
+To begin we need to calculate the total number of missing values in the original data set.  The number of missing values is:
+
+```{r,results='asis'}
+length(which(is.na(ProjectData$steps)))
+```
+
+The number of missing values represents the 13% (2304/17568) of the original data set.
+
+The author believes that the most appropriate way to impute the missing values is to calculate the mean per weekday (averaged across all days) per 5-minute interval.  To calculate the mean we need to introduce the weekday in the data frame named "CompleteProjectData", which stores all the complete cases.  Then create another data frame named "MeanWeekdayInterval" that will store the mean per weekday per 5-minute interval.  The code below is used to create the "MeanWeekdayInterval" data frame:
+
+```{r}
+## Add Weekday column in the data frame
+CompleteProjectData$weekday <- weekdays(as.Date(CompleteProjectData$date))
+## Create a new data frame to store the mean per weekday per interval
+MeanWeekdayInterval <- with(CompleteProjectData, aggregate(steps, by=list(weekday, interval), FUN=mean))
+## Give meaningful names to the data frame generated
+colnames(MeanWeekdayInterval) <- c("weekday", "interval", "AvgSteps")
+```
+
+The next step is to merge the new data frame "MeanWeekdayInterval" with the original data frame "ProjectData" into a new data set named "ProjectDataFull".  The two data frames will be joined using the "merge" command using two columns the "weekday" and the "interval".  Please note that the column "weekday" does not exist in the original data set "ProjectData" so we need to add it before merging the two data frames.  The new data frame "ProjectDataFull" will consist of five (5) variables and 17,568 observations.  The variables are weekday, interval, steps (original), date, and the AvgSteps.  Another variable will be added to the data frame named "NewSteps" using the "ifelse" expression.  This expression will add to the new variable the steps and where it finds a "NA" it will adds the mean number of steps per weekday and interval.  This new variable "NewSteps" will provide the basis to analyse how the original data set differs from this new data set created.
+
+```{r}
+## Add Weekday column in the data frame
+ProjectData$weekday <- weekdays(as.Date(ProjectData$date))
+## Merge the two data frames into a new data frame
+ProjectDataFull <- merge(ProjectData, MeanWeekdayInterval, by=c("weekday", "interval"))
+## Create a new variable "NewSteps"
+ProjectDataFull$NewSteps <- ifelse(is.na(ProjectDataFull$steps), ProjectDataFull$AvgSteps, ProjectDataFull$steps)
+```
+
+### Revised histogram to show the total number of steps taken per day after the replacement of missing values
+
+First we need to calculate the number of steps (NewSteps) use the following R code:
+
+```{r}
+TotalStepsRevised <- aggregate(ProjectDataFull$NewSteps, by=list(ProjectData$date), FUN=sum, na.rm=TRUE)
+```
+
+The next step is to print the histogram to show the total number of steps(NewSteps) taken per day:
+
+```{r}
+hist(TotalStepsRevised$x, main="Total number of steps taken per day", xlab="Total number of steps", col="Blue", ylim=c(0,30))
+```
+
+Then we need to calculate the mean and median of this new data set and compare it against the original data set.
+
+### Calculate revised mean
+
+```{r}
+NewMeanPerDay <- aggregate(ProjectDataFull$NewSteps, by=list(ProjectDataFull$date), FUN=mean)
+## Give meaningful names to the data frame generated
+colnames(NewMeanPerDay) <- c("Date", "Steps")
+``` 
+
+Then combine together the mean of the original data set with the mean of the full data set to enable easy comparisons.
+
+```{r show_mean_comparison,results='asis'}
+library(xtable)
+CombinedDataSet <- merge(MeanPerDay, NewMeanPerDay, by="Date", all=TRUE)
+MeanCombinedTable <- xtable(CombinedDataSet, caption="Mean comparison between the two data sets:")
+## Give meaningful names to the data frame generated
+colnames(MeanCombinedTable) <- c("Date", "OriginalMean", "NewMean")
+print(MeanCombinedTable, type="html", include.rownames=FALSE, caption.placement="top")
+```
+
+### Calculate revised median
+In calculating the revised median we first need to eliminate the 5 minute intervals with zero steps.  
+This is necessary for the median function to work correctly in dates where the first 5 minute
+interval and the last 5 minute interval steps is zero.  
+
+```{r}
+## Remove 5 minute intervals with zeros from the "ProjectDataFull" data frame
+NewMedianData <- subset(ProjectDataFull, ProjectDataFull$NewSteps >0)
+NewMedianPerDay <- aggregate(NewMedianData$NewSteps, by=list(NewMedianData$date), FUN=median)
+## Give meaningful names to the data frame generated
+colnames(NewMedianPerDay) <- c("Date", "Steps")
+```
+
+Then combine together the median of the original data set with the median of the full data set to enable easy comparisons.
+
+```{r show_median_comparison,results='asis'}
+library(xtable)
+CombinedDataSet <- merge(MedianPerDay, NewMedianPerDay, by="Date", all=TRUE)
+MedianCombinedTable <- xtable(CombinedDataSet, caption="Median comparison between the two data sets:")
+## Give meaningful names to the data frame generated
+colnames(MedianCombinedTable) <- c("Date", "OriginalMedian", "NewMedian")
+print(MedianCombinedTable, type="html", include.rownames=FALSE, caption.placement="top")
+```
+
+### Impact of imputing missing data
+The impact of imputing missing data into the original set is that new dates we introduced in the data set.  These new dates were completely missing from the original data set.  However in the dates that were both present in the original data set and the new data set the mean and median remained the same.
+
+## Differences in activity patterns between weekdays and weekends
+The differences in activity patterns between weekdays and weekends will be based on the "ProjectDataFull" data frame, i.e. the new data frame created to impute the missing data.  We need to create another factor variable named "DayFlag" to categorise the data between weekdays (DayFlag="WeekDay") and weekends (DayFlag="WeekENd").
+
+```{r}
+ProjectDataFull$DayFlag <- with(ProjectDataFull, ifelse(weekday=="Saturday" | weekday=="Sunday", "WeekEnd", "WeekDay"))
+```
+
+Then based on the new factor variable we will create two new data frames to calculate the mean of the steps during weekdays and weekends.
+
+```{r}
+WeekDayMeanData <- ProjectDataFull[ProjectDataFull$DayFlag=="WeekDay", ]
+WeekEndMeanData <- ProjectDataFull[ProjectDataFull$DayFlag=="WeekEnd", ]
+```
+
+Based on the new data frames we calculate the mean per interval and day flag.
+
+```{r}
+WeekDayMean <- with(WeekDayMeanData, aggregate(NewSteps, by=list(DayFlag, interval), FUN=mean))
+## Give meaningful names to the data frame generated
+colnames(WeekDayMean) <- c("DayFlag", "Interval", "MeanSteps")
+WeekEndMean <- with(WeekEndMeanData, aggregate(NewSteps, by=list(DayFlag, interval), FUN=mean))
+## Give meaningful names to the data frame generated
+colnames(WeekEndMean) <- c("DayFlag", "Interval", "MeanSteps")
+```
+
+The next step is to create one data frame to combine the results.
+
+```{r}
+CombinedMeanData <- rbind(WeekDayMean, WeekEndMean)
+```
+
+Finally plot a panel plot chart displaying the mean steps per interval per day flag (weekday or weekend).  
+This plot is based on the lattice system, make sure that is installed on your machine before trying to reproduce it.
+
+```{r}
+library(lattice)
+xyplot(MeanSteps~Interval|DayFlag, data=CombinedMeanData, type="l", xlab="Interval", ylab="Mean Steps", layout=c(1,2) )
+```
